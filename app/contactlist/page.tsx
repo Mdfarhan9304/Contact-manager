@@ -41,7 +41,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 
 interface Contact {
-  id: string;
+  _id: string;
   name: string;
   email: string;
   phone: string;
@@ -252,7 +252,7 @@ const handleUpdateContact = (contactId: string) => async (e: React.FormEvent<HTM
         },
       });
 
-      setContacts(contacts.filter((c) => c.id !== contactId));
+      setContacts(contacts.filter((c) => c._id !== contactId));
       setDeletingContact(null);
     } catch (error: any) {
       console.error(
@@ -363,7 +363,7 @@ const handleUpdateContact = (contactId: string) => async (e: React.FormEvent<HTM
           {isMobileView ? (
             <div className="space-y-4">
               {filteredContacts.map((contact) => (
-                <Card key={contact.id}>
+                <Card key={contact._id}>
                   <CardContent className="p-4">
                     <div className="flex justify-between items-start mb-2">
                       <h3 className="font-medium">{contact.name}</h3>
@@ -424,7 +424,7 @@ const handleUpdateContact = (contactId: string) => async (e: React.FormEvent<HTM
                   </TableHeader>
                   <TableBody>
                     {filteredContacts.map((contact) => (
-                      <TableRow key={contact.id}>
+                      <TableRow key={contact._id}>
                         <TableCell className="font-medium">
                           {contact.name}
                         </TableCell>

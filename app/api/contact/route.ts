@@ -1,7 +1,12 @@
 import { connectDB } from "../lib/connection";
 import Contact from "../models/contact";
 import { NextResponse } from "next/server";
-import jwt from "jsonwebtoken";
+import jwt, {JwtPayload} from "jsonwebtoken";
+
+
+interface CustomJwtPayload extends JwtPayload {
+  userId: string;
+}
 
 export async function POST(req: Request) {
   try {
@@ -18,7 +23,7 @@ export async function POST(req: Request) {
 
     let decoded;
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET!);
+      decoded = jwt.verify(token, process.env.JWT_SECRET!) as CustomJwtPayload;
     } catch (err) {
       console.error("Token verification failed:", err);
       return NextResponse.json({ error: "Invalid token" }, { status: 401 });
