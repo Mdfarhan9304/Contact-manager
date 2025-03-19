@@ -1,11 +1,25 @@
 "use client";
-import React from 'react'
-import { useState } from "react";
+
+import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { PlusCircle, Search, Download, Upload, Trash2, Edit, Mail, Phone, Building2, MapPin, LogOut, Linkedin as LinkedIn } from "lucide-react";
+import {
+  PlusCircle,
+  Search,
+  Download,
+  Upload,
+  Trash2,
+  Edit,
+  Mail,
+  Phone,
+  Building2,
+  MapPin,
+  LogOut,
+  Eye,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ModeToggle } from "@/components/mode-toggle";
+import axios from "axios";
 import {
   Table,
   TableBody,
@@ -20,12 +34,11 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogFooter,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import {
-  Card,
-  CardContent,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 
 interface Contact {
   id: string;
@@ -34,56 +47,192 @@ interface Contact {
   phone: string;
   company: string;
   address: string;
-  linkedInUrl?: string;
 }
 
 export default function Dashboard() {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = useState("");
+  const [loading, setLoading] = useState(false);
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
+  const [viewingContact, setViewingContact] = useState<Contact | null>(null);
+  const [deletingContact, setDeletingContact] = useState<Contact | null>(null);
   const [isMobileView, setIsMobileView] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
 
-  // Check for mobile view on mount and window resize
-  React.useEffect(() => {
+  useEffect(() => {
     const checkMobileView = () => {
       setIsMobileView(window.innerWidth < 768);
     };
     checkMobileView();
-    window.addEventListener('resize', checkMobileView);
-    return () => window.removeEventListener('resize', checkMobileView);
+    window.addEventListener("resize", checkMobileView);
+    return () => window.removeEventListener("resize", checkMobileView);
   }, []);
 
   const handleLogout = () => {
-    document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:01 GMT";
+    localStorage.removeItem("user");
     router.push("/login");
   };
+ 
+  useEffect(() => {
+    const fetchData = async () => {
+      const user = localStorage.getItem("user");
+      try {
+        if (!user) {
+          router.replace("/login");
+          return;
+        }
+    
+        setIsAuthenticated(true);
 
-  const handleAddContact = (e: React.FormEvent<HTMLFormElement>) => {
+        const token = localStorage.getItem("user");
+        const res = await axios.get("/api/contact", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+
+        console.log(JSON.stringify(res.data) + " Ye rha data");
+        setContacts(res.data);
+      } catch (error) {
+        console.error("Error fetching contacts:", error);
+      }
+    };
+
+    fetchData();
+  }, [router,  contacts]);
+
+
+
+
+
+
+
+
+useEffect(() => {
+  const fetchSearchResults = async () => {
+    if (searchTerm.length === 0) {
+    
+      const token = localStorage.getItem("user");
+      try {
+        const res = await axios.get("/api/contact/search", {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        setContacts(res.data);
+      } catch (err) {
+        console.error("Error fetching contacts:", err);
+      }
+      return;
+    }
+
+   
+    setLoading(true);
+    const token = localStorage.getItem("user");
+
+    try {
+      const res = await axios.get(`/api/search?q=${searchTerm}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      setContacts(res.data);
+    } catch (err) {
+      console.error("Error searching contacts:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const delayDebounceFn = setTimeout(() => {
+    fetchSearchResults();
+  }, 500); 
+  return () => clearTimeout(delayDebounceFn); 
+}, [searchTerm]);
+
+
+const handleUpdateContact = (contactId: string) => async (e: React.FormEvent<HTMLFormElement>) => {
+  e.preventDefault();
+
+  const form = e.currentTarget;
+  const formData = new FormData(form);
+  const updatedContact = {
+    name: formData.get("name") as string,
+    email: formData.get("email") as string,
+    phone: formData.get("phone") as string,
+    company: formData.get("company") as string,
+    address: formData.get("address") as string,
+  };
+
+  const token = localStorage.getItem("user");
+
+  try {
+    const { data } = await axios.patch(`/api/contact/${contactId}`, updatedContact, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    console.log("Updated data: " + JSON.stringify(data));
+
+    setContacts((prevContacts) =>
+      prevContacts.map((contact) => (contact._id === contactId ? data : contact))
+    );
+
+    console.log("Contact updated successfully!");
+  } catch (error) {
+    console.error("Error updating contact:", error);
+  }
+};
+
+ 
+
+ 
+
+  const handleAddContact = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
+
+    const form = e.currentTarget;
+    const formData = new FormData(form);
     const newContact = {
-      id: Date.now().toString(),
       name: formData.get("name") as string,
       email: formData.get("email") as string,
       phone: formData.get("phone") as string,
       company: formData.get("company") as string,
       address: formData.get("address") as string,
-      linkedInUrl: formData.get("linkedInUrl") as string,
     };
-    setContacts([...contacts, newContact]);
-    (e.target as HTMLFormElement).reset();
+
+    const token = localStorage.getItem("user");
+
+    try {
+      const { data } = await axios.post("/api/contact", newContact, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      console.log("Post data" + JSON.stringify(data));
+
+      setContacts((prevContacts) => [...prevContacts, data]);
+      console.log("Contact added successfully!");
+
+      form.reset();
+    } catch (error) {
+      console.error("Error adding contact:", error);
+    }
   };
 
   const handleExportCSV = () => {
-    const headers = ["Name", "Email", "Phone", "Company", "Address", "LinkedIn URL"];
+    const headers = ["Name", "Email", "Phone", "Company", "Address"];
     const csvContent = [
       headers.join(","),
-      ...contacts.map(contact => 
-        [contact.name, contact.email, contact.phone, contact.company, contact.address, contact.linkedInUrl].join(",")
-      )
+      ...contacts.map((contact) =>
+        [
+          contact.name,
+          contact.email,
+          contact.phone,
+          contact.company,
+          contact.address,
+        ].join(",")
+      ),
     ].join("\n");
-    
+
     const blob = new Blob([csvContent], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -93,25 +242,28 @@ export default function Dashboard() {
     window.URL.revokeObjectURL(url);
   };
 
-  const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const csvData = event.target?.result as string;
-        const lines = csvData.split("\n").slice(1);
-        const newContacts = lines.map(line => {
-          const [name, email, phone, company, address, linkedInUrl] = line.split(",");
-          return { id: Date.now().toString(), name, email, phone, company, address, linkedInUrl };
-        });
-        setContacts([...contacts, ...newContacts]);
-      };
-      reader.readAsText(file);
+
+
+  const handleDeleteContact = async (contactId: string) => {
+    try {
+      await axios.delete(`/api/contact/${contactId}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("user")}`,
+        },
+      });
+
+      setContacts(contacts.filter((c) => c.id !== contactId));
+      setDeletingContact(null);
+    } catch (error: any) {
+      console.error(
+        "Error:",
+        error.response?.data?.error || "Failed to delete contact"
+      );
     }
   };
 
-  const filteredContacts = contacts.filter(contact =>
-    Object.values(contact).some(value =>
+  const filteredContacts = contacts.filter((contact) =>
+    Object.values(contact).some((value) =>
       String(value).toLowerCase().includes(searchTerm.toLowerCase())
     )
   );
@@ -124,7 +276,11 @@ export default function Dashboard() {
             <h1 className="text-xl sm:text-2xl font-bold">Contact Manager</h1>
             <div className="flex items-center gap-2 sm:gap-4">
               <ModeToggle />
-              <Button variant="outline" onClick={handleLogout} size={isMobileView ? "icon" : "default"}>
+              <Button
+                variant="outline"
+                onClick={handleLogout}
+                size={isMobileView ? "icon" : "default"}
+              >
                 <LogOut className="h-4 w-4" />
                 {!isMobileView && <span className="ml-2">Logout</span>}
               </Button>
@@ -139,7 +295,10 @@ export default function Dashboard() {
             <div className="flex flex-wrap gap-2 sm:gap-4">
               <Dialog>
                 <DialogTrigger asChild>
-                  <Button className="gap-2" size={isMobileView ? "sm" : "default"}>
+                  <Button
+                    className="gap-2"
+                    size={isMobileView ? "sm" : "default"}
+                  >
                     <PlusCircle className="h-4 w-4" />
                     {!isMobileView && "Add Contact"}
                   </Button>
@@ -169,18 +328,16 @@ export default function Dashboard() {
                       <Label htmlFor="address">Address</Label>
                       <Input id="address" name="address" required />
                     </div>
-                    <div>
-                      <Label htmlFor="linkedInUrl">LinkedIn Profile URL</Label>
-                      <Input id="linkedInUrl" name="linkedInUrl" type="url" />
-                    </div>
-                    <Button type="submit" className="w-full">Add Contact</Button>
+                    <Button type="submit" className="w-full">
+                      Add Contact
+                    </Button>
                   </form>
                 </DialogContent>
               </Dialog>
 
-              <Button 
-                variant="outline" 
-                onClick={handleExportCSV} 
+              <Button
+                variant="outline"
+                onClick={handleExportCSV}
                 size={isMobileView ? "sm" : "default"}
                 className="gap-2"
               >
@@ -188,30 +345,14 @@ export default function Dashboard() {
                 {!isMobileView && "Export"}
               </Button>
 
-              <div className="relative">
-                <Input
-                  type="file"
-                  accept=".csv"
-                  onChange={handleImportCSV}
-                  className="hidden"
-                  id="csvInput"
-                />
-                <Button 
-                  variant="outline" 
-                  onClick={() => document.getElementById("csvInput")?.click()}
-                  size={isMobileView ? "sm" : "default"}
-                  className="gap-2"
-                >
-                  <Upload className="h-4 w-4" />
-                  {!isMobileView && "Import"}
-                </Button>
-              </div>
+          
             </div>
 
             <div className="relative w-full sm:w-64">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search contacts..."
+         
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
@@ -230,6 +371,13 @@ export default function Dashboard() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          onClick={() => setViewingContact(contact)}
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => setEditingContact(contact)}
                         >
                           <Edit className="h-4 w-4" />
@@ -237,7 +385,7 @@ export default function Dashboard() {
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => setContacts(contacts.filter(c => c.id !== contact.id))}
+                          onClick={() => setDeletingContact(contact)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
@@ -252,25 +400,6 @@ export default function Dashboard() {
                         <Phone className="h-4 w-4 text-muted-foreground" />
                         {contact.phone}
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Building2 className="h-4 w-4 text-muted-foreground" />
-                        {contact.company}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <MapPin className="h-4 w-4 text-muted-foreground" />
-                        {contact.address}
-                      </div>
-                      {contact.linkedInUrl && (
-                        <a
-                          href={contact.linkedInUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-primary hover:underline flex items-center gap-2"
-                        >
-                          <LinkedIn className="h-4 w-4" />
-                          LinkedIn Profile
-                        </a>
-                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -290,16 +419,15 @@ export default function Dashboard() {
                       <TableHead>Name</TableHead>
                       <TableHead>Email</TableHead>
                       <TableHead>Phone</TableHead>
-                      <TableHead>Company</TableHead>
-                      <TableHead>Address</TableHead>
-                      <TableHead>LinkedIn</TableHead>
                       <TableHead className="w-[100px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredContacts.map((contact) => (
                       <TableRow key={contact.id}>
-                        <TableCell className="font-medium">{contact.name}</TableCell>
+                        <TableCell className="font-medium">
+                          {contact.name}
+                        </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
                             <Mail className="h-4 w-4" />
@@ -314,31 +442,13 @@ export default function Dashboard() {
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-2">
-                            <Building2 className="h-4 w-4" />
-                            {contact.company}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
-                            <MapPin className="h-4 w-4" />
-                            {contact.address}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {contact.linkedInUrl && (
-                            <a
-                              href={contact.linkedInUrl}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-primary hover:underline flex items-center gap-2"
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setViewingContact(contact)}
                             >
-                              <LinkedIn className="h-4 w-4" />
-                              Profile
-                            </a>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2">
+                              <Eye className="h-4 w-4" />
+                            </Button>
                             <Button
                               variant="ghost"
                               size="icon"
@@ -349,7 +459,7 @@ export default function Dashboard() {
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() => setContacts(contacts.filter(c => c.id !== contact.id))}
+                              onClick={() => setDeletingContact(contact)}
                             >
                               <Trash2 className="h-4 w-4" />
                             </Button>
@@ -359,7 +469,10 @@ export default function Dashboard() {
                     ))}
                     {filteredContacts.length === 0 && (
                       <TableRow>
-                        <TableCell colSpan={7} className="text-center text-muted-foreground">
+                        <TableCell
+                          colSpan={4}
+                          className="text-center text-muted-foreground"
+                        >
                           No contacts found
                         </TableCell>
                       </TableRow>
@@ -372,28 +485,18 @@ export default function Dashboard() {
         </div>
       </main>
 
-      <Dialog open={!!editingContact} onOpenChange={() => setEditingContact(null)}>
+      {/* Edit Contact Dialog */}
+      <Dialog
+        open={!!editingContact}
+        onOpenChange={() => setEditingContact(null)}
+      >
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
             <DialogTitle>Edit Contact</DialogTitle>
           </DialogHeader>
           {editingContact && (
             <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const formData = new FormData(e.currentTarget);
-                const updatedContact = {
-                  ...editingContact,
-                  name: formData.get("name") as string,
-                  email: formData.get("email") as string,
-                  phone: formData.get("phone") as string,
-                  company: formData.get("company") as string,
-                  address: formData.get("address") as string,
-                  linkedInUrl: formData.get("linkedInUrl") as string,
-                };
-                setContacts(contacts.map(c => c.id === editingContact.id ? updatedContact : c));
-                setEditingContact(null);
-              }}
+            onSubmit={handleUpdateContact(editingContact._id)}
               className="space-y-4"
             >
               <div>
@@ -442,18 +545,78 @@ export default function Dashboard() {
                   required
                 />
               </div>
-              <div>
-                <Label htmlFor="edit-linkedInUrl">LinkedIn Profile URL</Label>
-                <Input
-                  id="edit-linkedInUrl"
-                  name="linkedInUrl"
-                  type="url"
-                  defaultValue={editingContact.linkedInUrl}
-                />
-              </div>
-              <Button type="submit" className="w-full">Save Changes</Button>
+              <Button type="submit" className="w-full">
+                Save Changes
+              </Button>
             </form>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* View Contact Dialog */}
+      <Dialog
+        open={!!viewingContact}
+        onOpenChange={() => setViewingContact(null)}
+      >
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Contact Details</DialogTitle>
+          </DialogHeader>
+          {viewingContact && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="font-medium">Name:</span>
+                  {viewingContact.name}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Mail className="h-4 w-4 text-muted-foreground" />
+                  {viewingContact.email}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-muted-foreground" />
+                  {viewingContact.phone}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Building2 className="h-4 w-4 text-muted-foreground" />
+                  {viewingContact.company}
+                </div>
+                <div className="flex items-center gap-2">
+                  <MapPin className="h-4 w-4 text-muted-foreground" />
+                  {viewingContact.address}
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog
+        open={!!deletingContact}
+        onOpenChange={() => setDeletingContact(null)}
+      >
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Delete Contact</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this contact? This action cannot
+              be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2 justify-end">
+            <Button variant="outline" onClick={() => setDeletingContact(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() =>
+                deletingContact && handleDeleteContact(deletingContact._id)
+              }
+            >
+              Delete
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
