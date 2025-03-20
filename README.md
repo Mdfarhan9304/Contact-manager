@@ -56,7 +56,7 @@ A full-stack contact management application that allows users to view, add, edit
 
 ## Folder Structure
 
-
+```
 contact-manager/
 │── pages/
 │   ├── api/
@@ -78,7 +78,7 @@ contact-manager/
 │── tsconfig.json
 │── README.md
 
-
+```
 ## Contributions
 
 Contributions are welcome! Feel free to fork the repository and submit a pull request.
